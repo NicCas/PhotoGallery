@@ -1,9 +1,11 @@
 package com.bignerdranch.android.photogallery
 
 import android.content.ContentValues.TAG
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.os.Bundle
+import android.os.Handler
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -28,11 +30,23 @@ class PhotoGalleryFragment : Fragment() {
 
     private lateinit var photoGalleryViewModel: PhotoGalleryViewModel
     private lateinit var photoRecyclerView: RecyclerView
+    private lateinit var thumbnailDownloader: ThumbnailDownloader<PhotoHolder>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        retainInstance = true
+
         photoGalleryViewModel = ViewModelProviders.of(this).get(PhotoGalleryViewModel::class.java)
+
+        val responseHandler = Handler()
+        thumbnailDownloader =
+                ThumbnailDownloader(responseHandler) { photoHolder, bitmap ->
+                    val drawable = BitmapDrawable(resources, bitmap)
+                    photoHolder.bindDrawable(drawable)
+                }
+
+        lifecycle.addObserver(thumbnailDownloader)
     }
 
     override fun onCreateView(
@@ -55,6 +69,13 @@ class PhotoGalleryFragment : Fragment() {
                 Observer { galleryItems ->
                     photoRecyclerView.adapter = PhotoAdapter(galleryItems)
                 })
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        lifecycle.removeObserver(
+                thumbnailDownloader
+        )
     }
 
     private class PhotoHolder(private val itemImageView: ImageView)
@@ -87,6 +108,7 @@ class PhotoGalleryFragment : Fragment() {
                 R.drawable.bill_up_close
             ) ?: ColorDrawable()
             holder.bindDrawable(placeholder)
+            thumbnailDownloader.queueThumbnail(holder, galleryItem.url)
         }
     }
 
